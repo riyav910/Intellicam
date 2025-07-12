@@ -31,17 +31,7 @@ A real-time AI-powered object detection and surveillance system using *YOLOv8, *
 > ⚠ Python 3.8+ recommended  
 > Create and activate a virtual environment before starting (optional but recommended)
 
-bash```
-git clone https://https://github.com/riyav910/Intellicam.git
-cd visionguard-ai
-
-# Create virtual environment (optional)
-python -m venv venv
-venv\Scripts\activate  # On Windows
-# source venv/bin/activate  # On Linux/macOS
-
-# Install dependencies
-pip install -r requirements.txt
+bash```git clone https://github.com/riyav910/Intellicam.git cd visionguard-ai # Create virtual environment (optional) python -m venv venv venv\Scripts\activate # On Windows # source venv/bin/activate  # On Linux/macOS # Install dependencies pip install -r requirements.txt
 
 #------ How to Run------
 python webcam_voice.py
