@@ -6,13 +6,13 @@ A real-time AI-powered object detection and surveillance system using *YOLOv8, *
 
 ## 🚀 Features
 
-- ✅ Real-time object detection with YOLOv8
-- 🎙 Voice announcements of new objects (toggle with v key)
-- 🚨 Dangerous object alerts (e.g., knife, gun, fire, hammer)
-- 📸 Screenshot saving for threats
-- 📊 Object count overlay on webcam feed
-- 🧾 Live detection log on screen and in log.txt
-- 🧹 Clean terminal output
+-  Real-time object detection with YOLOv8
+-  Voice announcements of new objects (toggle with v key)
+-  Dangerous object alerts (e.g., knife, gun, fire, hammer)
+-  Screenshot saving for threats
+-  Object count overlay on webcam feed
+-  Live detection log on screen and in log.txt
+-  Clean terminal output
 
 ---
 
@@ -31,16 +31,7 @@ A real-time AI-powered object detection and surveillance system using *YOLOv8, *
 > ⚠ Python 3.8+ recommended  
 > Create and activate a virtual environment before starting (optional but recommended)
 
-```git clone https://github.com/riyav910/Intellicam.git 
-cd visionguard-ai 
-# Create virtual environment (optional) 
-python -m venv venv
-venv\Scripts\activate # On Windows 
-# source venv/bin/activate  # On Linux/macOS 
-# Install dependencies 
-pip install -r requirements.txt
-#------ How to Run------
-python webcam_voice.py
+<pre> ```bash git clone https://github.com/riyav910/Intellicam.git cd visionguard-ai # Create virtual environment (optional) python -m venv venv venv\Scripts\activate # On Windows # source venv/bin/activate # On Linux/macOS # Install dependencies pip install -r requirements.txt # Run the app python webcam_voice.py ``` </pre>
 
 ## Controls:
 
