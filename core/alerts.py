@@ -4,6 +4,7 @@ import time
 import pyttsx3
 import threading
 
+from config.settings import ALERT_COOLDOWN
 from utils.time_utils import (
     current_time_str,
     current_datetime_str,
@@ -18,8 +19,11 @@ class AlertManager:
         enable_screenshot=True,
         log_dir="logs",
         screenshot_dir="screenshots",
-        cooldown_seconds=5
+        cooldown_seconds=ALERT_COOLDOWN
     ):
+        self.log_dir = os.path.abspath(log_dir)
+        self.screenshot_dir = os.path.abspath(screenshot_dir)
+
         self.engine = pyttsx3.init()
         self.enable_voice = enable_voice
         self.enable_screenshot = enable_screenshot
@@ -77,7 +81,7 @@ class AlertManager:
     def handle_danger(self, label, confidence, frame):
         label = label.lower()
 
-        # ❌ Ignore duplicate events within cooldown
+        # Ignore duplicate events within cooldown
         if not self._is_new_event(label):
             return None
 
@@ -87,7 +91,7 @@ class AlertManager:
         time_str = current_time_str()
         datetime_str = current_datetime_str()
 
-        # 1️⃣ Voice alert
+        #  Voice alert
         if self.enable_voice:
             threading.Thread(
                 target=self._speak,
@@ -95,11 +99,11 @@ class AlertManager:
                 daemon=True
             ).start()
 
-        # 2️⃣ Screenshot (only once per event)
+        # Screenshot (only once per event)
         if self.enable_screenshot:
             self._save_screenshot(label, frame)
 
-        # 3️⃣ File log (only once per event)
+        #  File log (only once per event)
         file_log = (
             f"[{datetime_str}] "
             f"DANGEROUS OBJECT: {label.upper()} | "
@@ -107,5 +111,5 @@ class AlertManager:
         )
         self._log_to_file(file_log)
 
-        # 4️⃣ UI log message
+        # UI log message
         return f"[{time_str}] ⚠️ {label.upper()} detected ({confidence:.2f})"

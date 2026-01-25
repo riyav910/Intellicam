@@ -17,9 +17,9 @@ from collections import Counter
 
 
 # Load YOLOv8 model
-# model = YOLO("yolov8n.pt")
+model = YOLO("yolov8n.pt")
 # model = YOLO("yolov8s.pt")
-model = YOLO("yolov8m.pt")
+# model = YOLO("yolov8m.pt")
 # model = YOLO("yolov8ml.pt")
 
 # Voice engine

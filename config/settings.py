@@ -3,15 +3,35 @@ from ultralytics import YOLO
 MODEL_PATH = "yolov8n.pt"
 MODEL = YOLO(MODEL_PATH)
 
+# ================= Detection Thresholds =================
+
+CONFIDENCE_THRESHOLD = 0.75
+DANGER_THRESHOLD = 0.7
+
+# ================= Alert System =================
+
+ALERT_COOLDOWN = 5  # seconds
+
+# ================= Logging =================
+
+ENABLE_FEATURE_LOGGING = True
+
+# ================= UI Refresh =================
+
+UI_UPDATE_INTERVAL = 0.5  # seconds
+
+# ================= Object Categories =================
+
 DANGEROUS_OBJECTS = [
     "knife", "gun", "fire", "chainsaw", "smoke",
     "axe", "bomb", "sword", "grenade", "syringe"
 ]
 
-DISPLAY_TIMEOUT = 1.0
+LABEL_VOCAB = [
+    "knife", "gun", "fire", "smoke",
+    "person", "bottle", "phone", "book"
+]
 
-ENABLE_ALERTS = True
-ENABLE_SCREENSHOTS = True
 
 # ================= Camera Configuration =================
 

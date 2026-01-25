@@ -6,17 +6,21 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QTimer, Qt
 
 from ui.camera_view import CameraView
-from config.settings import MODEL, DISPLAY_TIMEOUT, DANGEROUS_OBJECTS
+from config.settings import (
+    MODEL, DISPLAY_TIMEOUT, DANGEROUS_OBJECTS,
+    CONFIDENCE_THRESHOLD, DANGER_THRESHOLD,
+    UI_UPDATE_INTERVAL, LABEL_VOCAB,
+    ENABLE_FEATURE_LOGGING,
+    CAMERA_SOURCE, ALERT_COOLDOWN
+)
 from core.detector import ObjectDetector
 from core.tracker import ObjectTracker
 from core.alerts import AlertManager
 from utils.logger import DetectionLogger
 import time
 from core.danger_model import DangerModel
-from config.settings import CAMERA_SOURCE
 
-
-CONFIDENCE_THRESHOLD = 0.75
+from utils.data_logger import FeatureLogger
 
 class IntellicamUI(QWidget):
     def __init__(self):
@@ -35,21 +39,19 @@ class IntellicamUI(QWidget):
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
 
-        self.ui_update_interval = 0.5  # seconds
-        self.last_ui_update_time = 0
-
-        self.label_vocab = [
-            "knife", "gun", "fire", "smoke",
-            "person", "bottle", "phone", "book"
-        ]
+        self.ui_update_interval = UI_UPDATE_INTERVAL
+        self.label_vocab = LABEL_VOCAB
+        self.DANGER_THRESHOLD = DANGER_THRESHOLD
+        self.cooldown_seconds=ALERT_COOLDOWN
 
         self.danger_model = DangerModel(self.label_vocab)
-
-        self.DANGER_THRESHOLD = 0.7
 
         self.frame_count = 0
         self.fps = 0
         self.fps_timer_start = time.time()
+
+        self.feature_logger = FeatureLogger()
+
 
     def init_ui(self):
         self.image_label = CameraView(640, 480)
@@ -118,7 +120,10 @@ class IntellicamUI(QWidget):
 
             bbox_area = (x2 - x1) * (y2 - y1)
             frame_area = frame.shape[0] * frame.shape[1]
-            bbox_area_ratio = bbox_area / frame_area
+            bbox_area_ratio = min(bbox_area / frame_area, 1.0)
+
+            if conf > 0.6 and ENABLE_FEATURE_LOGGING:
+                self.feature_logger.log(label.lower(), conf, bbox_area_ratio)            
             
             danger_score = self.danger_model.predict(
                 label.lower(),
@@ -126,13 +131,16 @@ class IntellicamUI(QWidget):
                 bbox_area_ratio
             )
 
-            if danger_score >= self.DANGER_THRESHOLD:
+            is_rule_danger = label.lower() in DANGEROUS_OBJECTS
+            is_ml_danger = danger_score >= self.DANGER_THRESHOLD
+
+            if is_rule_danger or is_ml_danger:
                 color = (0, 0, 200)
-                msg = self.alerts.handle_danger(label, conf, frame)
+                msg = self.alerts.handle_danger(label, conf, frame.copy())
                 if msg:
                     self.logger.log(msg)
 
-            if danger_score >= self.DANGER_THRESHOLD:
+            if is_rule_danger or is_ml_danger:
                 labels.append(label.lower())
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
