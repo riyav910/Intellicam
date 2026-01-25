@@ -1,16 +1,4 @@
----
-title: Intellicam
-emoji: 🎯
-colorFrom: blue
-colorTo: green
-sdk: gradio  # or streamlit, depending on what you're using
-sdk_version: 3.50.2  # or the correct version you're using
-app_file: app.py  # or the main file you want HF to run
-pinned: false
-license: mit
----
-
-# Intellicam AI 🔍🛡
+# Intellicam AI
 
 A real-time AI-powered object detection and surveillance system using *YOLOv8, **OpenCV, and **pyttsx3*. It detects objects live from your webcam, announces them via voice, logs them, highlights dangerous ones, and even takes screenshots of critical alerts!
 
@@ -77,3 +65,4 @@ Logs are saved in log.txt with timestamps.
 ## Connect
 Built with 💻 and 🤖 by Riya Verma  
 If you're working on something similar or want to collaborate, feel free to connect!
+
