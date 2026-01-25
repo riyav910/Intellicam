@@ -25,3 +25,9 @@ screenshots/
 # Local test / experimental scripts
 test_*.py
 webcam_detect.py
+
+# model weights 
+*.pt
+*.onnx
+*.engine
+
