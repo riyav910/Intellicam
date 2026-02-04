@@ -1,8 +1,7 @@
 import sys
 import cv2
-import torch
 import pyttsx3
-import numpy as np
+import os
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QTextEdit, QCheckBox
@@ -14,13 +13,15 @@ from PyQt5.QtCore import QObject, pyqtSignal
 from collections import defaultdict
 import time
 from collections import Counter
+from modules.narrator import SceneNarrator
+
 
 
 # Load YOLOv8 model
-model = YOLO("yolov8n.pt")
+# model = YOLO("yolov8n.pt")
 # model = YOLO("yolov8s.pt")
-# model = YOLO("yolov8m.pt")
-# model = YOLO("yolov8ml.pt")
+model = YOLO("yolov8m.pt")
+# model = YOLO("yolov8l.pt")
 
 # Voice engine
 engine = pyttsx3.init()
@@ -42,6 +43,11 @@ class IntellicamUI(QWidget):
         self.setWindowTitle("Intellicam - Object Detection")
         self.setGeometry(100, 100, 900, 700)
 
+        self.narrator = SceneNarrator(
+            cooldown=2,
+            enable_voice=True   
+        )
+
         self.init_ui()
         self.cap = cv2.VideoCapture(0)
 
@@ -52,8 +58,13 @@ class IntellicamUI(QWidget):
         self.log_signal = LogSignal()
         self.log_signal.log_updated.connect(self.update_log)
 
-        self.tracked_objects = defaultdict(lambda: 0)  # Object name → last seen timestamp
-        self.display_timeout = 1.0  # seconds to wait before removing object if not seen
+        self.tracked_objects = defaultdict(lambda: 0)  
+        self.display_timeout = 1.0
+
+        os.makedirs("Screenshots", exist_ok=True)
+        os.makedirs("Logs", exist_ok=True)
+
+       
 
     def init_ui(self):
         # Camera label
@@ -81,6 +92,10 @@ class IntellicamUI(QWidget):
         control_layout.addWidget(self.voice_checkbox)
         control_layout.addWidget(self.screenshot_checkbox)
 
+        self.describe_button = QPushButton("Describe Scene")
+        self.describe_button.clicked.connect(self.describe_now)
+        control_layout.addWidget(self.describe_button)
+
         bottom_layout = QVBoxLayout()
         bottom_layout.addLayout(control_layout)
         bottom_layout.addWidget(QLabel("Detection Log:"))
@@ -95,6 +110,9 @@ class IntellicamUI(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Q:
             self.close()
+        if event.key() == Qt.Key_V:
+            self.describe_now()
+
 
     def toggle_voice_alerts(self, state):
         global ENABLE_ALERTS
@@ -106,6 +124,10 @@ class IntellicamUI(QWidget):
 
     def update_log(self, text):
         self.log_text.setPlainText(text)  # This replaces everything each time
+
+    def describe_now(self):
+        if hasattr(self, "latest_counts"):
+            self.narrator.describe(self.latest_counts)
 
     def update_frame(self):
         ret, frame = self.cap.read()
@@ -127,17 +149,28 @@ class IntellicamUI(QWidget):
             if label.lower() in DANGEROUS_OBJECTS:
                 color = (0, 0, 200)
                 timestamp = datetime.now().strftime("%H:%M:%S")
+                datetime_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 log_msg = f"[{timestamp}] ⚠️ {label.upper()} detected with {conf:.2f} confidence"
                 # self.log_text.append(log_msg)
+                
+                # ---------------- UI log ----------------
                 self.log_text.append(log_msg)
 
+                # ---------------- FILE log ----------------
+                log_path = os.path.join("Logs", "danger_log.txt")
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(log_msg + "\n")
+
+                # ---------------- Voice ----------------
                 if ENABLE_ALERTS:
                     engine.say(f"Dangerous item detected: {label}")
                     engine.runAndWait()
 
+                # ---------------- Screenshot ----------------
                 if ENABLE_SCREENSHOTS:
-                    screenshot_filename = f"screenshot_{label}_{timestamp.replace(':', '-')}.png"
-                    cv2.imwrite(screenshot_filename, frame)
+                    filename = f"screenshot_{label}_{datetime_name}.png"
+                    screenshot_path = os.path.join("Screenshots", filename)
+                    cv2.imwrite(screenshot_path, frame)
 
             detected_items.append(label)
 
@@ -168,6 +201,10 @@ class IntellicamUI(QWidget):
         if self.tracked_objects:
             # Count how many times each object appears in current frame
             counts = Counter(detected_items)
+
+            # narrator for description
+            # self.narrator.describe(counts)
+            self.latest_counts = counts
             
             display_text = "Detected Objects:\n"
             for item, count in counts.items():

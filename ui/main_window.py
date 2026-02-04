@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QCheckBox
 )
 from PyQt5.QtCore import QTimer, Qt
-
+from modules.narrator import SceneNarrator
 from ui.camera_view import CameraView
 from config.settings import (
     MODEL, DISPLAY_TIMEOUT, DANGEROUS_OBJECTS,
@@ -51,7 +51,6 @@ class IntellicamUI(QWidget):
         self.fps_timer_start = time.time()
 
         self.feature_logger = FeatureLogger()
-
 
     def init_ui(self):
         self.image_label = CameraView(640, 480)
@@ -151,6 +150,7 @@ class IntellicamUI(QWidget):
             )
 
         counts = self.tracker.update(labels)
+
         current_time = time.time()
         if current_time - self.last_ui_update_time >= self.ui_update_interval:
             self.show_counts(counts)
