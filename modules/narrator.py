@@ -66,3 +66,24 @@ class SceneNarrator:
         # 🔹 optional speech
         if self.enable_voice:
             self._speak(sentence)
+    
+    def speak_sentence(self, sentence):
+        if not sentence:
+            return
+
+        now = time.time()
+
+        if now - self.last_spoken_time < self.cooldown:
+            return
+
+        if sentence == self.last_sentence:
+            return
+
+        self.last_sentence = sentence
+        self.last_spoken_time = now
+
+        self._log_to_file(sentence)
+
+        if self.enable_voice:
+            self._speak(sentence)
+

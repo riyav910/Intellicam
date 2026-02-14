@@ -19,6 +19,7 @@ ENABLE_FEATURE_LOGGING = True
 # ================= UI Refresh =================
 
 UI_UPDATE_INTERVAL = 0.5  # seconds
+DISPLAY_TIMEOUT= 3  # seconds   
 
 # ================= Object Categories =================
 

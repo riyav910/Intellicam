@@ -3,7 +3,7 @@ class ObjectDetector:
         self.model = model
 
     def detect(self, frame):
-        results = self.model(frame)[0]
+        results = self.model(frame, verbose=False)[0]
         detections = []
 
         for box in results.boxes:

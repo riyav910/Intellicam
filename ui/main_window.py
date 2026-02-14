@@ -1,64 +1,71 @@
 import cv2
+import os
+import time
+from datetime import datetime
+from collections import Counter, defaultdict
+
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QTextEdit, QVBoxLayout,
-    QHBoxLayout, QCheckBox
+    QHBoxLayout, QCheckBox, QPushButton
 )
+from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QTimer, Qt
-from modules.narrator import SceneNarrator
-from ui.camera_view import CameraView
-from config.settings import (
-    MODEL, DISPLAY_TIMEOUT, DANGEROUS_OBJECTS,
-    CONFIDENCE_THRESHOLD, DANGER_THRESHOLD,
-    UI_UPDATE_INTERVAL, LABEL_VOCAB,
-    ENABLE_FEATURE_LOGGING,
-    CAMERA_SOURCE, ALERT_COOLDOWN
-)
-from core.detector import ObjectDetector
-from core.tracker import ObjectTracker
-from core.alerts import AlertManager
-from utils.logger import DetectionLogger
-import time
-from core.danger_model import DangerModel
 
+from config.settings import (
+    MODEL, DANGEROUS_OBJECTS,
+    CONFIDENCE_THRESHOLD, DANGER_THRESHOLD,
+    ENABLE_FEATURE_LOGGING, LABEL_VOCAB
+)
+
+from core.detector import ObjectDetector
+from core.alerts import AlertManager
+from core.danger_model import DangerModel
+from core.scene_reasoner import SceneReasoner
 from utils.data_logger import FeatureLogger
+from modules.narrator import SceneNarrator
+
 
 class IntellicamUI(QWidget):
     def __init__(self):
         super().__init__()
+
         self.setWindowTitle("Intellicam - Object Detection")
         self.setGeometry(100, 100, 900, 700)
 
         self.init_ui()
 
+        # -------- Camera (like original app.py) --------
+        self.cap = cv2.VideoCapture(0)
+
+        # -------- Core Systems --------
         self.detector = ObjectDetector(MODEL)
-        self.tracker = ObjectTracker(DISPLAY_TIMEOUT)
         self.alerts = AlertManager()
-        self.logger = DetectionLogger(self.log_text)
+        self.danger_model = DangerModel(LABEL_VOCAB)
+        self.feature_logger = FeatureLogger()
+
+        self.narrator = SceneNarrator(
+            cooldown=2,
+            enable_voice=True
+        )
+        # self.narrator.speak_sentence("Voice system initialized.")
+
+        self.scene_reasoner = SceneReasoner()
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
 
-        self.ui_update_interval = UI_UPDATE_INTERVAL
-        self.label_vocab = LABEL_VOCAB
-        self.DANGER_THRESHOLD = DANGER_THRESHOLD
-        self.cooldown_seconds=ALERT_COOLDOWN
-
-        self.danger_model = DangerModel(self.label_vocab)
-
-        self.frame_count = 0
-        self.fps = 0
-        self.fps_timer_start = time.time()
-
-        self.feature_logger = FeatureLogger()
+    # ==================================================
+    # UI
+    # ==================================================
 
     def init_ui(self):
-        self.image_label = CameraView(640, 480)
+        self.image_label = QLabel()
+        self.image_label.setFixedSize(640, 480)
 
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
 
-        # ---------- Create controls layout FIRST ----------
         controls = QHBoxLayout()
 
         self.voice_checkbox = QCheckBox("Voice Alerts")
@@ -71,11 +78,10 @@ class IntellicamUI(QWidget):
         self.screenshot_checkbox.stateChanged.connect(self.toggle_screenshot)
         controls.addWidget(self.screenshot_checkbox)
 
-        # self.toggle_camera_checkbox = QCheckBox("Use Mobile Camera")
-        # self.toggle_camera_checkbox.stateChanged.connect(self.toggle_camera)
-        # controls.addWidget(self.toggle_camera_checkbox)
+        self.describe_button = QPushButton("Describe Scene (V)")
+        self.describe_button.clicked.connect(self.describe_scene_now)
+        controls.addWidget(self.describe_button)
 
-        # ---------- Main layout ----------
         layout = QVBoxLayout()
         layout.addWidget(self.image_label)
         layout.addLayout(controls)
@@ -84,28 +90,58 @@ class IntellicamUI(QWidget):
 
         self.setLayout(layout)
 
+    # ==================================================
+    # Keyboard (EXACTLY like working app.py)
+    # ==================================================
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Q:
+            self.close()
+
+        if event.key() == Qt.Key_V:
+            self.describe_scene_now()
+
+    # ==================================================
+    # Controls
+    # ==================================================
 
     def toggle_voice(self, state):
         self.alerts.enable_voice = state == Qt.Checked
+        self.narrator.enable_voice = state == Qt.Checked
 
     def toggle_screenshot(self, state):
         self.alerts.enable_screenshot = state == Qt.Checked
 
-    def toggle_camera(self, state):
-        if state == Qt.Checked:
-            mobile_url = CAMERA_SOURCE  # IP camera
-            self.image_label.switch_source(mobile_url)
-        else:
-            self.image_label.switch_source(0)
+    # ==================================================
+    # Scene Description
+    # ==================================================
 
+    def describe_scene_now(self):
+        ret, frame = self.cap.read()
+        if not ret:
+            return
+
+        def debug_callback(sentence):
+            print("SCENE OUTPUT:", sentence)
+            self.narrator.speak_sentence(sentence)
+
+        self.scene_reasoner.describe_scene(
+            frame.copy(),
+            callback=debug_callback
+        )
+
+
+    # ==================================================
+    # Frame Loop
+    # ==================================================
 
     def update_frame(self):
-        frame = self.image_label.read_frame()
-        if frame is None:
+        ret, frame = self.cap.read()
+        if not ret:
             return
 
         detections = self.detector.detect(frame)
-        labels = []
+        detected_labels = []
 
         for det in detections:
             label = det["label"]
@@ -119,28 +155,27 @@ class IntellicamUI(QWidget):
 
             bbox_area = (x2 - x1) * (y2 - y1)
             frame_area = frame.shape[0] * frame.shape[1]
-            bbox_area_ratio = min(bbox_area / frame_area, 1.0)
+            bbox_ratio = min(bbox_area / frame_area, 1.0)
 
             if conf > 0.6 and ENABLE_FEATURE_LOGGING:
-                self.feature_logger.log(label.lower(), conf, bbox_area_ratio)            
-            
+                self.feature_logger.log(label.lower(), conf, bbox_ratio)
+
             danger_score = self.danger_model.predict(
-                label.lower(),
-                conf,
-                bbox_area_ratio
+                label.lower(), conf, bbox_ratio
             )
 
-            is_rule_danger = label.lower() in DANGEROUS_OBJECTS
-            is_ml_danger = danger_score >= self.DANGER_THRESHOLD
+            is_danger = (
+                label.lower() in DANGEROUS_OBJECTS
+                or danger_score >= DANGER_THRESHOLD
+            )
 
-            if is_rule_danger or is_ml_danger:
+            if is_danger:
                 color = (0, 0, 200)
                 msg = self.alerts.handle_danger(label, conf, frame.copy())
                 if msg:
-                    self.logger.log(msg)
+                    self.log_text.append(msg)
 
-            if is_rule_danger or is_ml_danger:
-                labels.append(label.lower())
+            detected_labels.append(label.lower())
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             cv2.putText(
@@ -149,46 +184,23 @@ class IntellicamUI(QWidget):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2
             )
 
-        counts = self.tracker.update(labels)
-
-        current_time = time.time()
-        if current_time - self.last_ui_update_time >= self.ui_update_interval:
-            self.show_counts(counts)
-            self.last_ui_update_time = current_time
-
-        # FPS calculation
-        self.frame_count += 1
-        elapsed = time.time() - self.fps_timer_start
-
-        if elapsed >= 1.0:
-            self.fps = self.frame_count / elapsed
-            self.frame_count = 0
-            self.fps_timer_start = time.time()
-
-        cv2.putText(
-            frame,
-            f"FPS: {int(self.fps)}",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 255, 0),
-            2
-        )
-
-        self.image_label.display_frame(frame)
-
-
-    def show_counts(self, counts):
-        if not counts:
-            return
-
-        text = "Detected Objects:\n"
-        for item, count in counts.items():
-            bar = "█" * min(count, 20)
-            text += f"{item:<10}: {bar} ({count})\n"
+        # -------- Show detected counts --------
+        if detected_labels:
+            counts = Counter(detected_labels)
+            text = "Detected Objects:\n"
+            for item, count in counts.items():
+                bar = "█" * min(count, 20)
+                text += f"{item:<10}: {bar} ({count})\n"
+        else:
+            text = "Detected Objects:\n- None"
 
         self.log_text.setPlainText(text)
 
+        # -------- Display Frame --------
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        qt_img = QImage(rgb.data, rgb.shape[1], rgb.shape[0], QImage.Format_RGB888)
+        self.image_label.setPixmap(QPixmap.fromImage(qt_img))
+
     def closeEvent(self, event):
-        self.image_label.release()
+        self.cap.release()
         cv2.destroyAllWindows()
