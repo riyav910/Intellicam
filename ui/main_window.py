@@ -55,6 +55,9 @@ class IntellicamUI(QWidget):
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
 
+        self.latest_detections = []
+
+
     # ==================================================
     # UI
     # ==================================================
@@ -77,6 +80,11 @@ class IntellicamUI(QWidget):
         self.screenshot_checkbox.setChecked(True)
         self.screenshot_checkbox.stateChanged.connect(self.toggle_screenshot)
         controls.addWidget(self.screenshot_checkbox)
+
+        self.detailed_checkbox = QCheckBox("Detailed Mode (LLM)")
+        self.detailed_checkbox.setChecked(False)
+        controls.addWidget(self.detailed_checkbox)
+
 
         self.describe_button = QPushButton("Describe Scene (V)")
         self.describe_button.clicked.connect(self.describe_scene_now)
@@ -121,14 +129,37 @@ class IntellicamUI(QWidget):
         if not ret:
             return
 
-        def debug_callback(sentence):
-            print("SCENE OUTPUT:", sentence)
+        # If Detailed Mode OFF → Instant YOLO description
+        if not self.detailed_checkbox.isChecked():
+            filtered_labels = [
+                det["label"].lower()
+                for det in self.latest_detections
+                if det["confidence"] >= CONFIDENCE_THRESHOLD
+            ]
+
+            if not filtered_labels:
+                sentence = "I do not see any known objects."
+            else:
+                counts = Counter(filtered_labels)
+                parts = [
+                    f"{count} {label}"
+                    for label, count in counts.items()
+                ]
+                sentence = "I see " + ", ".join(parts)
+
+            print("YOLO OUTPUT:", sentence)
             self.narrator.speak_sentence(sentence)
 
-        self.scene_reasoner.describe_scene(
-            frame.copy(),
-            callback=debug_callback
-        )
+        # If Detailed Mode ON → Use LLM
+        else:
+            def debug_callback(sentence):
+                print("LLM OUTPUT:", sentence)
+                self.narrator.speak_sentence(sentence)
+
+            self.scene_reasoner.describe_scene(
+                frame.copy(),
+                callback=debug_callback
+            )
 
 
     # ==================================================
@@ -141,6 +172,7 @@ class IntellicamUI(QWidget):
             return
 
         detections = self.detector.detect(frame)
+        self.latest_detections = detections
         detected_labels = []
 
         for det in detections:

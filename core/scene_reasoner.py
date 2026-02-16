@@ -27,7 +27,7 @@ class SceneReasoner:
             suffix=".jpg",
             delete=False
         )
-        cv2.imwrite(tmp_file.name, frame)
+        cv2.imwrite(tmp_file.name, frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
         return tmp_file.name
 
 
@@ -41,9 +41,13 @@ class SceneReasoner:
 
             payload = {
                 "model": self.model_name,
-                "prompt": "Describe this scene in 1 short sentence.",
+                "prompt": "Describe image in 1 short sentence.",
                 "images": [image_base64],
-                "stream": False
+                "stream": False,
+                "options": {
+                    "num_ctx": 512,
+                    "temperature": 0.2
+                }
             }
 
             print("[SceneReasoner] Sending request to Ollama...")
@@ -87,7 +91,7 @@ class SceneReasoner:
 
         def worker():
             # 🔹 Resize ONLY for LLM (faster processing)
-            frame_small = cv2.resize(frame, (384, 384))
+            frame_small = cv2.resize(frame, (224, 224))
 
             image_path = self._encode_image(frame_small)
             description = self._call_ollama(image_path)
@@ -101,3 +105,6 @@ class SceneReasoner:
                 callback(description)
 
         threading.Thread(target=worker, daemon=True).start()
+
+
+    
